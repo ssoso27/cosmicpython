@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Set
 from dataclasses import dataclass
 from datetime import date
 
@@ -15,7 +15,17 @@ class Batch:
         self.reference = ref  # Batch 참조 번호
         self.sku = sku  # 제품 식별자
         self.eta = eta  # 예상 도착일
-        self.available_quantity = qty  # 사용 가능한 수량
+        self._purchased_quantity = qty  # 구매 수량 (Batch 가 구매한 제품 수량)
+
+        self._allocations: Set[OrderLine] = set()  # 할당된 OrderLine 집합
+
+    @property
+    def allocated_quantity(self) -> int:
+        return sum(_line.qty for _line in self._allocations)
+
+    @property
+    def available_quantity(self) -> int:
+        return self._purchased_quantity - self.allocated_quantity
 
     def allocate(self, line: OrderLine):
         """
@@ -23,11 +33,9 @@ class Batch:
         할당 후에는 사용 가능한 수량이 줄어든다.
         :param line: OrderLine
         """
-        if line.sku != self.sku:
-            raise ValueError(f"Invalid sku {line.sku}")
-        if self.available_quantity < line.qty:
-            raise ValueError("Not enough stock")
-        self.available_quantity -= line.qty
+        if not self.can_allocate(line):
+            raise ValueError("Cannot allocate line")
+        self._allocations.add(line)
 
     def can_allocate(self, line: OrderLine) -> bool:
         """
@@ -39,3 +47,12 @@ class Batch:
             return False
 
         return self.available_quantity >= line.qty
+
+    def deallocate(self, line: OrderLine):
+        """
+        OrderLine 을 할당 해제한다.
+        할당 해제 후에는 사용 가능한 수량이 증가한다.
+        단, 자신에게 할당되지 않은 OrderLine 을 할당 해제하면, 수량 변화가 없다.
+        """
+        if line in self._allocations:
+            self._allocations.remove(line)

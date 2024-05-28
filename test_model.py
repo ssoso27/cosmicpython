@@ -27,6 +27,32 @@ def test_allocating_to_a_batch_reduces_the_available_quantity():
     assert batch.available_quantity == 18
 
 
+def test_allocate_add_order_line_to_allocations():
+    """
+    OrderLine 을 할당하면, Batch._allocations 에 OrderLine 이 추가된다.
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    line = OrderLine("order-ref", "SMALL-TABLE", 10)
+
+    batch._allocations = set()  # reset allocations
+    batch.allocate(line)
+
+    assert line in batch._allocations
+
+
+def test_allocation_is_idempotent():
+    """
+    이미 할당된 OrderLine 을 다시 할당하면, 아무런 변화가 없어야 한다. (멱등)
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    line = OrderLine("order-ref", "SMALL-TABLE", 2)
+
+    batch.allocate(line)
+    batch.allocate(line)
+
+    assert batch.available_quantity == 18
+
+
 """
 Test Batch.can_allocate() method
 """
@@ -70,6 +96,50 @@ def test_cannot_allocate_if_skus_do_not_match():
     line = OrderLine("order-ref", "LARGE-TABLE", 10)
 
     assert not batch.can_allocate(line)
+
+
+"""
+Test Batch.deallocate() method
+"""
+
+
+def test_deallocate_and_increase_available_quantity():
+    """
+    할당된 OrderLine 을 할당 해제하면, Batch.available_quantity 가 증가한다.
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    allocated_line = OrderLine("order-ref", "SMALL-TABLE", 2)
+    batch._allocations = {allocated_line}
+
+    before_deallocate = batch.available_quantity
+    batch.deallocate(allocated_line)
+    assert batch.available_quantity == before_deallocate + 2
+
+
+def test_deallocate_does_not_increase_available_quantity_if_line_not_allocated():
+    """
+    할당되지 않은 OrderLine 을 할당 해제하면, Batch.available_quantity 가 변하지 않는다.
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    unallocated_line = OrderLine("order-ref", "SMALL-TABLE", 2)
+
+    batch.deallocate(unallocated_line)
+    assert batch.available_quantity == 20
+
+
+def test_deallocate_is_idempotent():
+    """
+    이미 할당 해제된 OrderLine 을 다시 할당 해제하면, 아무런 변화가 없어야 한다. (멱등)
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    allocated_line = OrderLine("order-ref", "SMALL-TABLE", 2)
+    batch._allocations = {allocated_line}
+
+    before_deallocate = batch.available_quantity
+    batch.deallocate(allocated_line)
+    batch.deallocate(allocated_line)
+
+    assert batch.available_quantity == before_deallocate + 2
 
 
 def test_prefers_warehouse_batches_to_shipments():
