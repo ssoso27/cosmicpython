@@ -3,10 +3,9 @@ import pytest
 
 # from model import ...
 from model import Batch, OrderLine
+from my_exceptions import AllocateError
 
 today = date.today()
-tomorrow = today + timedelta(days=1)
-later = tomorrow + timedelta(days=10)
 
 
 """
@@ -51,6 +50,17 @@ def test_allocation_is_idempotent():
     batch.allocate(line)
 
     assert batch.available_quantity == 18
+
+
+def test_raises_allocate_error_if_not_equal_sku():
+    """
+    Batch.sku 와 OrderLine.sku 가 다르면 할당할 수 없다.
+    """
+    batch = Batch("batch-001", "SMALL-TABLE", qty=20, eta=today)
+    line = OrderLine("order-ref", "LARGE-TABLE", 2)
+
+    with pytest.raises(AllocateError):
+        batch.allocate(line)
 
 
 """
@@ -140,11 +150,3 @@ def test_deallocate_is_idempotent():
     batch.deallocate(allocated_line)
 
     assert batch.available_quantity == before_deallocate + 2
-
-
-def test_prefers_warehouse_batches_to_shipments():
-    pytest.fail("todo")
-
-
-def test_prefers_earlier_batches():
-    pytest.fail("todo")

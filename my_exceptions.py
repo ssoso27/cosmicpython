@@ -1,0 +1,2 @@
+class AllocateError(Exception):
+    pass

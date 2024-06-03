@@ -1,6 +1,7 @@
-from typing import Optional, Set
+from typing import Optional, Set, List
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
+from my_exceptions import AllocateError
 
 
 @dataclass(frozen=True)  # OrderLine 은 동작이 없는 불변 데이터 클래스다.
@@ -48,7 +49,6 @@ class Batch:
         """
         return hash(self.reference)
 
-
     @property
     def allocated_quantity(self) -> int:
         return sum(_line.qty for _line in self._allocations)
@@ -64,7 +64,7 @@ class Batch:
         :param line: OrderLine
         """
         if not self.can_allocate(line):
-            raise ValueError("Cannot allocate line")
+            raise AllocateError("Cannot allocate line")
         self._allocations.add(line)
 
     def can_allocate(self, line: OrderLine) -> bool:
@@ -86,3 +86,20 @@ class Batch:
         """
         if line in self._allocations:
             self._allocations.remove(line)
+
+
+def allocate(line: OrderLine, batches: List[Batch]) -> str:
+    """
+    모든 재고를 표현하는 구체적인 Batch 집합에서 OrderLine 을 할당하는 도메인 서비스 함수
+    :param line: OrderLine
+    :param batches: List[Batch]  (Why not Set[Batch]?)
+    :return: 할당된 Batch 의 참조 번호
+    """
+    already = date.today() - timedelta(days=1)
+    batches = sorted(batches, key=lambda x: x.eta or already)  # None 을 처리하기 위해 기본값을 설정한다.
+    for b in batches:
+        if b.can_allocate(line):
+            b.allocate(line)
+            return b.reference
+    else:
+        raise AllocateError("All batches cannot allocate the line")
